@@ -18,6 +18,8 @@
     "test:manuscript": "electron scripts/manuscript.e2e.js",
     "test:pages": "electron scripts/pages.e2e.js",
     "test:simple": "electron scripts/simple.e2e.js",
+    "build:web": "node scripts/web-build.js",
+    "test:web": "node --test scripts/web-sync.test.js",
     "test": "node --test \"scripts/*.test.js\"",
     "test:coverage": "node --test --experimental-test-coverage \"scripts/*.test.js\"",
     "lint": "oxlint",
@@ -132,7 +134,7 @@
     ],
     "files": [
       "**/*",
-      "!pocket/**",
+      "!pocket/**", "!web/**", "!vercel.json",
       "!dist/**",
       "!Backups/**",
       "!*.md",

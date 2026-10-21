@@ -18,7 +18,7 @@ Read [CONTRIBUTING.md](CONTRIBUTING.md) before adding a feature. The product is 
 
 | File | Role |
 |---|---|
-| `main.js` | Window, menus, every filesystem operation, import parsing, PDF, backups |
+| `main.js` | Window, menus, every filesystem operation, import (the parsing is `import-parse.js`), PDF, backups |
 | `preload.js` | The entire renderer API, `window.neo` |
 | `index.html` | Two views: `#bookshelf-view` and `#editor-view`. CSP is `script-src 'self'` |
 | `app.js` | The whole UI, in banner-marked sections. Search for the banner before reading the file |
@@ -31,7 +31,9 @@ Read [CONTRIBUTING.md](CONTRIBUTING.md) before adding a feature. The product is 
 | `spell-ro.js` | Romanian diacritics, used by the worker. Does not alter the manuscript |
 | `manuscript.js` | Standard manuscript format: the word count's rounding, the header's surname, the `.docx`'s parts and the PDF's page, from a model the window hands it. Plain JavaScript that also runs in Node (`window.NeoManuscript`, loaded by `index.html`) |
 | `locales/<code>.json` | One language. Regional files (`fr-CA.json`) hold only the strings that differ |
+| `import-parse.js` | A manuscript's bytes (.docx, .txt, .md, .fountain, .fdx) into chapters. Plain JavaScript shared by `main.js`'s import and the web (`window.NeoImport`) |
 | `pocket/` | Capacitor shell. It does not contain its own editor |
+| `web/` | NEO in a browser (Vercel): Pocket's page on a library in IndexedDB, synced with OneDrive. `web/README.md` |
 | `print/` | Vendored Paged.js and hyphenation patterns for paperback PDFs |
 
 `app.js` section banners look like `/*  SAVING  */`. Start there: bookshelf, bound shelves, editor open, typing, poetry, screenplays, placeholders, nav, tabs, outline, outline cards, darlings, counters, saving, refresh, structural undo, find, import, spellcheck, focus, goals, export, manuscript format.
@@ -195,7 +197,7 @@ node scripts/i18n.js template
 node scripts/i18n.js check fr
 ```
 
-`scripts/i18n.js` only scans `app.js`, `main.js`, `covers.js`, `index.html`, and Pocket's own `pocket/www/index.html` and `pocket/www/pocket-bridge.js`. A new string in another file will not enter the template until that list includes it. Pocket's page marks its words with the same `data-i18n*` attributes as the desktop's, and its ⋯ sheet and bridge use `t()`.
+`scripts/i18n.js` only scans `app.js`, `main.js`, `covers.js`, `index.html`, Pocket's own `pocket/www/index.html` and `pocket/www/pocket-bridge.js`, and the web's `web/web-bridge.js`, `web/sync.js` and `web/library-zip.js`. A new string in another file will not enter the template until that list includes it. Pocket's page marks its words with the same `data-i18n*` attributes as the desktop's, and its ⋯ sheet and bridge use `t()`.
 
 Details, plural forms, and regional fallback (`fr-CA` → `fr` → English) are in [TRANSLATING.md](TRANSLATING.md). Quotation marks follow the spellcheck language (`QUOTE_STYLES` in `app.js`). Import chapter detection is `CHAPTER_WORDS` in `main.js`. Cover small-words are `CONNECTORS` in `covers.js`.
 
@@ -207,6 +209,15 @@ Italian has no spellcheck dictionary: the only Hunspell package on npm is GPL-3.
 
 `scripts/pocket-www.js` (run by CI, and by hand before a local build) copies `app.js`, `covers.js`, `styles.css`, `i18n.js`, `fonts/`, `locales/`, Hunspell's browser build, and the `SPELL_LANGUAGES` dictionaries from `main.js` into `pocket/www/`. Pocket's checker is `pocket/www/pocket-spell.js`, a module worker with the same messages as `spell-worker.js`. A change to those files changes Pocket. Pocket-only behavior belongs in `pocket-bridge.js` or the native projects, not behind a desktop-only branch scattered through `app.js`.
 
+## Web
+
+`web/` is NEO in a browser, iPad first, built by `npm run build:web` (`scripts/web-build.js`) into `web/dist` from `pocket/www` and `web/`, and hosted on Vercel (`vercel.json`). It is Pocket: `web/capacitor-shim.js` plays Capacitor's Filesystem over IndexedDB (`NeoStore`), so `pocket-bridge.js` and `app.js` run unchanged, and `web/web-bridge.js` lays the browser's import, export, PDF and covers over `window.neo`. Web-only behavior belongs in `web/`, not in `app.js`.
+
+- Sync is OneDrive, in its app folder (Apps → NEO, `Files.ReadWrite.AppFolder`): `web/onedrive.js` signs in with PKCE (the site's client id is `NEO_ONEDRIVE_CLIENT_ID` at build) and `web/sync.js` copies whole files with eTags. A file changed in both places keeps both (`<name>.sync-conflict-<when>-<where>`); `library.json` met on two devices is merged so every book stays on a shelf (`mergeLibrary`). Writes from a pull get a fresh mtime and app.js's `refreshFromDisk` takes them in. `.tmp`, `.bak`, `neo-errors.log`, `Backups/` and `Exports/` stay on the device.
+- iCloud has no web API: the Files app gets the library as a `.zip` (`web/library-zip.js`), the layout of desktop NEO's daily backup, which opens there too.
+- `web/sw.js` keeps an offline copy and serves cover pictures from the library at `/__library/`.
+- `scripts/web-sync.test.js` (`npm run test:web`) plays OneDrive in memory.
+
 ## Commands
 
 ```
@@ -217,6 +228,8 @@ npm run test:coverage      # node --test --experimental-test-coverage scripts/*.
 npm run lint               # oxlint, Electron's standard-style JavaScript rules
 npm run test:spellcheck    # node --test scripts/spellcheck.test.js
 npm run test:dashes        # node --test scripts/dashes.test.js
+npm run build:web          # NEO on the web, into web/dist (Vercel runs it)
+npm run test:web           # node --test scripts/web-sync.test.js
 npm run bundle             # Hugh: brings in the newest .bundle from ~/Downloads and pushes main
 npm run try                # Hugh: opens the newest .bundle's NEO on a copy of the library, pushes nothing (-- fresh: an empty library)
 npm run release            # Hugh: next version (x.y.9 → x.(y+1).0), commit, push, tag (npm run release -- 2.0.0 for another)

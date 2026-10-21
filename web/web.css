@@ -1,0 +1,26 @@
+/* ======================= NEO WEB — after pocket.css ======================= */
+
+/* the shelf's Import button works in a browser (pocket.css hides it) */
+#shelf-header #import-btn { display: inline-block !important; }
+#shelf-header #import-btn[hidden] { display: none !important; }
+
+#web-sync-btn {
+  background: none; border: 1px solid #3a3a3a; color: var(--muted);
+  border-radius: 6px; padding: 5px 12px; font-size: 12px; min-height: 30px;
+}
+#web-sync-btn:hover, #web-sync-btn:focus-visible { color: var(--accent); border-color: var(--accent); }
+#web-sync-btn.ws-alert { color: var(--accent); border-color: var(--accent); }
+body.light #web-sync-btn { border-color: #cfcac0; }
+
+#web-sync-sheet .modal { width: min(520px, calc(100vw - 32px)); padding: 28px 30px 20px; }
+#web-sync-sheet .ws-h {
+  font-weight: 400; font-size: 13px; letter-spacing: 2px; text-transform: uppercase;
+  color: var(--muted); margin: 22px 0 8px;
+}
+#web-sync-sheet .ws-soft { color: var(--muted); font-size: 13px; }
+#web-sync-sheet .ws-actions { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 8px; }
+#web-sync-sheet .ws-actions button { min-height: 40px; }
+#web-sync-sheet .ws-done { justify-content: flex-end; margin-top: 18px; }
+@media (max-width: 600px) {
+  #shelf-header .ws-label { display: none; }
+}
