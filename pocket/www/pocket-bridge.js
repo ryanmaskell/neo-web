@@ -513,7 +513,10 @@
   // the device's language (regional file over its base, English beneath).
   // Read synchronously here because app.js reads window.neo.i18n as it loads.
   function loadLocale() {
-    const want = String(navigator.language || 'en').replace('_', '-');
+    // (NEO on the web keeps View → Language's choice here)
+    let chosen = null;
+    try { chosen = localStorage.getItem('neo-language'); } catch { /* none */ }
+    const want = String(chosen || navigator.language || 'en').replace('_', '-');
     const base = want.split('-')[0];
     const get = (code) => {
       try {

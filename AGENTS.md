@@ -31,6 +31,8 @@ Read [CONTRIBUTING.md](CONTRIBUTING.md) before adding a feature. The product is 
 | `spell-ro.js` | Romanian diacritics, used by the worker. Does not alter the manuscript |
 | `manuscript.js` | Standard manuscript format: the word count's rounding, the header's surname, the `.docx`'s parts and the PDF's page, from a model the window hands it. Plain JavaScript that also runs in Node (`window.NeoManuscript`, loaded by `index.html`) |
 | `locales/<code>.json` | One language. Regional files (`fr-CA.json`) hold only the strings that differ |
+| `menu-template.js` | The menu bar as a template (`menuTemplate`, `simpleTemplate`), from the state `buildMenu()` hands it. Shared by Electron and the web's ⋯ menu (`window.NeoMenu`) |
+| `print-book.js` | KDP's trims, paper and margin bands, the soft hyphens and the cover template, shared by `main.js` and the web (`window.NeoPrintBook`) |
 | `import-parse.js` | A manuscript's bytes (.docx, .txt, .md, .fountain, .fdx) into chapters. Plain JavaScript shared by `main.js`'s import and the web (`window.NeoImport`) |
 | `pocket/` | Capacitor shell. It does not contain its own editor |
 | `web/` | NEO in a browser (Vercel): Pocket's page on a library in IndexedDB, synced with OneDrive. `web/README.md` |
@@ -38,7 +40,7 @@ Read [CONTRIBUTING.md](CONTRIBUTING.md) before adding a feature. The product is 
 
 `app.js` section banners look like `/*  SAVING  */`. Start there: bookshelf, bound shelves, editor open, typing, poetry, screenplays, placeholders, nav, tabs, outline, outline cards, darlings, counters, saving, refresh, structural undo, find, import, spellcheck, focus, goals, export, manuscript format.
 
-Menus are built in `buildMenu()` in `main.js`. A menu click sends `{ type, ... }` to the window; `app.js` handles it on `window.neo.onMenu`.
+Menus are built in `buildMenu()` in `main.js` from `menuTemplate()` in `menu-template.js`, which takes everything it reads through its one argument (the ticks, `send`, and `actions` for the few items main.js does itself). A menu click sends `{ type, ... }` to the window; `app.js` handles it on `window.neo.onMenu`. A new menu item goes in `menu-template.js`, and so reaches the web's ⋯ menu too.
 
 ## Simple NEO and Show More Features
 
@@ -211,9 +213,10 @@ Italian has no spellcheck dictionary: the only Hunspell package on npm is GPL-3.
 
 ## Web
 
-`web/` is NEO in a browser, iPad first, built by `npm run build:web` (`scripts/web-build.js`) into `web/dist` from `pocket/www` and `web/`, and hosted on Vercel (`vercel.json`). It is Pocket: `web/capacitor-shim.js` plays Capacitor's Filesystem over IndexedDB (`NeoStore`), so `pocket-bridge.js` and `app.js` run unchanged, and `web/web-bridge.js` lays the browser's import, export, PDF and covers over `window.neo`. Web-only behavior belongs in `web/`, not in `app.js`.
+`web/` is NEO in a browser, iPad first, with every desktop feature (`IS_WEB` in `app.js`: Pocket's touch page, but `POCKET_APP`, Pocket's own apps, is what stays simple; the web opens with Show More Features on), built by `npm run build:web` (`scripts/web-build.js`) into `web/dist` from `pocket/www` and `web/`, and hosted on Vercel (`vercel.json`). It is Pocket: `web/capacitor-shim.js` plays Capacitor's Filesystem over IndexedDB (`NeoStore`), so `pocket-bridge.js` and `app.js` run unchanged, and `web/web-bridge.js` lays the browser's import, export, PDF and covers over `window.neo`. Web-only behavior belongs in `web/`, not in `app.js`.
 
 - Sync is OneDrive, in its app folder (Apps → NEO, `Files.ReadWrite.AppFolder`): `web/onedrive.js` signs in with PKCE (the site's client id is `NEO_ONEDRIVE_CLIENT_ID` at build) and `web/sync.js` copies whole files with eTags. A file changed in both places keeps both (`<name>.sync-conflict-<when>-<where>`); `library.json` met on two devices is merged so every book stays on a shelf (`mergeLibrary`). Writes from a pull get a fresh mtime and app.js's `refreshFromDisk` takes them in. `.tmp`, `.bak`, `neo-errors.log`, `Backups/` and `Exports/` stay on the device.
+- The menus are the desktop's (`menu-template.js`) behind ⋯, in the editor's bar and on the shelf (`web/web-menu.js`), which also answers their keys and takes the `*State` calls preload.js would carry. `web/web-powers.js` does main.js's other powers in the browser: Paperback for KDP and Manuscript Format lay out with Paged.js in a frame (`web/paged-run.js`) and print through Save as PDF, one tap per file; painted covers call OpenAI with the writer's key kept in `localStorage`; Email Draft prints the PDF and opens the mail.
 - iCloud has no web API: the Files app gets the library as a `.zip` (`web/library-zip.js`), the layout of desktop NEO's daily backup, which opens there too.
 - `web/sw.js` keeps an offline copy and serves cover pictures from the library at `/__library/`.
 - `scripts/web-sync.test.js` (`npm run test:web`) plays OneDrive in memory.

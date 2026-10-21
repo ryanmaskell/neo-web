@@ -108,7 +108,8 @@
   const MIME = {
     txt: 'text/plain;charset=utf-8', md: 'text/markdown;charset=utf-8', html: 'text/html;charset=utf-8',
     fountain: 'text/plain;charset=utf-8', fdx: 'application/xml;charset=utf-8',
-    docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', epub: 'application/epub+zip'
+    docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', epub: 'application/epub+zip',
+    jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp'
   };
 
   // the browser's own printing makes the PDF (Save as PDF, or the iPad's
@@ -130,7 +131,7 @@
     });
   }
 
-  neo.exportSave = async ({ format, defaultName, content, zipEntries, print }) => {
+  neo.exportSave = async ({ format, defaultName, content, zipEntries, print, base64 }) => {
     try {
       const name = (defaultName || 'book') + '.' + format;
       if (format === 'pdf') {
@@ -145,7 +146,8 @@
         for (const e of zipEntries) zip.file(e.path, e.content, { base64: !!e.base64, compression: e.store ? 'STORE' : 'DEFLATE' });
         blob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE', mimeType: MIME[format] || 'application/zip' });
       } else {
-        blob = new Blob([content], { type: MIME[format] || 'application/octet-stream' });
+        // (a picture comes as base64: Save cover as image…)
+        blob = new Blob([base64 ? root.NeoStore.base64ToBytes(content) : content], { type: MIME[format] || 'application/octet-stream' });
       }
       return (await root.NeoLibraryZip.saveBlob(blob, name)) ? name : null;
     } catch (err) {
@@ -329,6 +331,7 @@
         : t('Library opened.')), 800);
     }
   });
+  root.NeoWebSheet = { open: openSheet };
   sync.onStatus(() => { updateChip(); renderSheet(); });
   OD.onChange(() => { updateChip(); renderSheet(); });
 })(typeof globalThis !== 'undefined' ? globalThis : this);

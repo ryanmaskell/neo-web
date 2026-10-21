@@ -1,4 +1,4 @@
-// NEO — painted covers (main process)
+// NEO — painted covers (main process, and NEO on the web as window.NeoArt)
 //
 // Once a story passes a thousand words, NEO reads it and paints a textless
 // cover for the shelf in the manner of a real jacket: a committed style, a
@@ -133,7 +133,8 @@ function openaiStyle({ base, textModels, imageModels, imageExtras, sizeParams, t
         const body = await post(base + '/images/generations', { Authorization: 'Bearer ' + apiKey }, payload);
         const b64 = body.data && body.data[0] && body.data[0].b64_json;
         if (!b64) throw new Error('The image model returned no picture');
-        return { buffer: Buffer.from(b64, 'base64'), ext: 'jpg' };
+        // (a browser has no Buffer: it takes the base64 as it came)
+        return { buffer: typeof Buffer !== 'undefined' ? Buffer.from(b64, 'base64') : null, base64: b64, ext: 'jpg' };
       });
     }
   };
@@ -157,7 +158,8 @@ async function paintCover({ provider, apiKey, text, textModel, imageModel, quali
   if (!p) throw new Error('Unknown cover-art provider: ' + provider);
   const b = await p.writeBrief({ apiKey, text, model: textModel });
   const i = await p.paint({ apiKey, brief: b.result, model: imageModel, quality });
-  return { buffer: i.result.buffer, ext: i.result.ext, brief: b.result, textModel: b.model, imageModel: i.model };
+  return { buffer: i.result.buffer, base64: i.result.base64, ext: i.result.ext, brief: b.result, textModel: b.model, imageModel: i.model };
 }
 
-module.exports = { paintCover, excerpt, PROVIDERS };
+if (typeof module === 'object' && module.exports) module.exports = { paintCover, excerpt, PROVIDERS };
+else globalThis.NeoArt = { paintCover, excerpt, PROVIDERS };

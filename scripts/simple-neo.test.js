@@ -122,12 +122,14 @@ const from = app.indexOf('function usesMoreFeatures(lib)');
 const to = app.indexOf('async function setMoreFeatures(on)');
 assert.ok(from > 0 && to > from, 'the SIMPLE NEO code is where the test expects it');
 
-function room(library, { metas = {}, key = false, pocket = false } = {}) {
+function room(library, { metas = {}, key = false, pocket = false, web = false } = {}) {
   const log = [];
   const ctx = vm.createContext({
     library,
     log,
-    IS_POCKET: pocket,
+    IS_POCKET: pocket || web,
+    IS_WEB: web,
+    POCKET_APP: pocket,
     t: (s) => s,
     toast: (msg) => log.push('toast ' + msg),
     setTimeout: (fn) => fn(),
@@ -153,6 +155,13 @@ describe('a library from before Show More Features', () => {
     await ctx.decideMoreFeatures();
     assert.equal(ctx.library.moreFeatures, false);
     assert.deepEqual([...ctx.log], ['write false', 'menu false']);
+  });
+
+  test('NEO on the web opens with every feature, and says nothing', async () => {
+    const ctx = room({ shelves: [shelf([])] }, { web: true });
+    await ctx.decideMoreFeatures();
+    assert.equal(ctx.library.moreFeatures, true);
+    assert.deepEqual([...ctx.log], ['write true', 'menu true']);
   });
 
   test('a writer using none of it goes simple, and is told once where it went', async () => {

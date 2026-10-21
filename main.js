@@ -1315,23 +1315,11 @@ ipcMain.handle('export:save', async (_e, { format, defaultName, content, zipEntr
 // and prints both files.
 // ---------------------------------------------------------------------------
 
-// KDP's trim sizes NEO offers (inches), its paper (spine thickness per page),
-// and its minimum inside margin by page count. kdp.amazon.com, Oct 2026.
-const KDP_TRIMS = { '5x8': [5, 8], '5.25x8': [5.25, 8], '5.5x8.5': [5.5, 8.5], '6x9': [6, 9] };
-const KDP_PAPER = { white: 0.002252, cream: 0.0025, groundwood: 0.00235 };
-const KDP_MAX_PAGES = { white: 828, cream: 776, groundwood: 812 };
-function kdpGutterMin(pages) {
-  return pages <= 150 ? 0.375 : pages <= 300 ? 0.5 : pages <= 500 ? 0.625 : pages <= 700 ? 0.75 : 0.875;
-}
-// the inside margin NEO sets: KDP's minimum plus a quarter inch, so words
-// never run into the fold
-function kdpGutter(pages) { return kdpGutterMin(pages) + 0.25; }
-
-// Soft hyphens where the language allows a break, so a justified line
-// hyphenates the same on every computer (Chromium hyphenates by itself only
-// on a Mac). Never in a capitalised word (names), never fewer than three
-// letters either side, and not in a paragraph's last word.
-const HYPHEN_LANGS = { en: 'en-us', 'en-gb': 'en-gb', 'en-au': 'en-gb', fr: 'fr', es: 'es', de: 'de-1996', nl: 'nl', pl: 'pl', pt: 'pt', ro: 'ro', ru: 'ru', el: 'el-monoton', hu: 'hu', it: 'it' };
+// KDP's trims, paper and margin bands, the soft hyphens and the cover
+// template are print-book.js, shared with NEO on the web
+const PrintBook = require('./print-book.js');
+const { KDP_TRIMS, KDP_PAPER, KDP_MAX_PAGES, HYPHEN_LANGS } = PrintBook;
+function kdpGutter(pages) { return PrintBook.kdpGutter(pages); }
 const hyphenators = {};
 function hyphenatorFor(lang) {
   const code = String(lang || 'en').toLowerCase();
@@ -1345,41 +1333,7 @@ function hyphenatorFor(lang) {
   }
   return hyphenators[key];
 }
-function hyphenateWord(word, hy, nouns) {
-  // a capital is a name, so the word stays whole; except in German, where
-  // every noun has one
-  if (!nouns && /^\p{Lu}/u.test(word)) return word;
-  const h = hy(word);
-  if (h === word) return word;
-  let out = '';
-  let at = 0; // letters so far
-  const letters = word.length;
-  for (const ch of h) {
-    if (ch === '­') { if (at >= 3 && letters - at >= 3) out += ch; continue; }
-    out += ch;
-    at++;
-  }
-  return out;
-}
-function hyphenateHtml(html, lang) {
-  const hy = hyphenatorFor(lang);
-  if (!hy) return html;
-  const nouns = /^de\b/i.test(String(lang || ''));
-  // only the paragraphs app.js marked .hy (prose), text between tags only
-  return html.replace(/(<p\b[^>]*\bclass="[^"]*\bhy\b[^"]*"[^>]*>)([\s\S]*?)(<\/p>)/g, (m, open, inner, close) => {
-    const parts = inner.split(/(<[^>]+>|&[#\w]+;)/);
-    // the last word of the paragraph keeps its hyphens out of the last line
-    let lastText = -1;
-    parts.forEach((part, i) => { if (i % 2 === 0 && /\p{L}/u.test(part)) lastText = i; });
-    return open + parts.map((part, i) => {
-      if (i % 2 === 1) return part;
-      const words = part.split(/([\p{L}\p{M}]+)/u);
-      let lastWord = -1;
-      if (i === lastText) words.forEach((w, k) => { if (k % 2 === 1) lastWord = k; });
-      return words.map((w, k) => (k % 2 === 1 && k !== lastWord && w.length >= 6 ? hyphenateWord(w, hy, nouns) : w)).join('');
-    }).join('') + close;
-  });
-}
+function hyphenateHtml(html, lang) { return PrintBook.hyphenateHtml(html, lang, hyphenatorFor); }
 
 // Lays a book out in pages and prints it. The window must be drawing (an
 // offscreen one is): Paged.js steps through animation frames, and a hidden
@@ -1471,60 +1425,7 @@ function printWindow() {
   return printWin;
 }
 
-// The cover template: the whole wrap (back, spine, front) at KDP's size for
-// this page count, with the bleed, the trim, the spine, the safe areas and
-// the barcode's place drawn in, each labelled. A designer works on top of it.
-function kdpCoverHtml({ trim, paper, pages, title, author }) {
-  const [tw, th] = KDP_TRIMS[trim];
-  const bleed = 0.125;
-  const spine = pages * KDP_PAPER[paper];
-  const W = bleed + tw + spine + tw + bleed;
-  const H = bleed + th + bleed;
-  const inch = (n) => n.toFixed(4) + 'in';
-  const box = (x, y, w, h, cls, label = '') => `<div class="${cls}" style="left:${inch(x)};top:${inch(y)};width:${inch(w)};height:${inch(h)}">${label}</div>`;
-  const esc = (v) => String(v || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-  const fmt = (n) => n.toFixed(3).replace(/0+$/, '').replace(/\.$/, '');
-  const mm = (n) => (n * 25.4).toFixed(1);
-  const backX = bleed;
-  const spineX = bleed + tw;
-  const frontX = bleed + tw + spine;
-  const safe = 0.125;
-  const spineText = pages >= 79;
-  const paperName = { white: t('white paper'), cream: t('cream paper'), groundwood: t('groundwood paper') }[paper];
-  return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
-@page { size: ${inch(W)} ${inch(H)}; margin: 0; }
-html, body { margin: 0; padding: 0; }
-body { width: ${inch(W)}; height: ${inch(H)}; position: relative; overflow: hidden; font: 8pt/1.35 -apple-system, "Segoe UI", "Helvetica Neue", Arial, sans-serif; color: #1f4f8a; background: #fff; }
-div { position: absolute; box-sizing: border-box; }
-.bleed { background: #f6d5d5; }
-.trim { border: 1px solid #c0392b; background: #fff; }
-.spine { background: #eef3fa; border-left: 1px solid #1f4f8a; border-right: 1px solid #1f4f8a; }
-.safe { border: 1px dashed #1f4f8a; }
-.spinesafe { border-left: 1px dashed #1f4f8a; border-right: 1px dashed #1f4f8a; }
-.barcode { background: #fff7d6; border: 1px solid #b7950b; color: #7d6608; display: flex; align-items: center; justify-content: center; text-align: center; padding: 0.08in; }
-.lbl { padding: 0.06in; }
-.panel { display: flex; align-items: center; justify-content: center; text-align: center; color: #9fb4cf; font-size: 20pt; letter-spacing: 0.12em; }
-.info { color: #1f4f8a; }
-.vert { writing-mode: vertical-rl; display: flex; align-items: center; justify-content: center; text-align: center; color: #1f4f8a; font-size: 7pt; }
-</style></head><body>
-${box(0, 0, W, H, 'bleed')}
-${box(bleed, bleed, W - 2 * bleed, H - 2 * bleed, 'trim')}
-${box(spineX, bleed, spine, th, 'spine')}
-${box(backX + safe, bleed + safe, tw - 2 * safe, th - 2 * safe, 'safe')}
-${box(frontX + safe, bleed + safe, tw - 2 * safe, th - 2 * safe, 'safe')}
-${spine > 0.125 ? box(spineX + 0.0625, bleed + safe, spine - 0.125, th - 2 * safe, 'spinesafe') : ''}
-${box(backX, bleed, tw, th, 'panel', esc(t('BACK COVER')))}
-${box(frontX, bleed, tw, th, 'panel', esc(t('FRONT COVER')))}
-${box(backX + tw - 0.25 - 2, bleed + th - 0.25 - 1.2, 2, 1.2, 'barcode', esc(t('Barcode area (KDP adds it here)')) + '<br>2 × 1.2 in')}
-${box(frontX + safe + 0.05, bleed + safe + 0.05, tw - 2 * safe - 0.1, 1.6, 'lbl info', `<b>${esc(title)}</b>${author ? ' · ' + esc(author) : ''}<br>
-${esc(t('Full cover: {w} × {h} in ({wmm} × {hmm} mm), bleed included', { w: fmt(W), h: fmt(H), wmm: mm(W), hmm: mm(H) }))}<br>
-${esc(t('Trim: {w} × {h} in · {pages} pages · {paper}', { w: fmt(tw), h: fmt(th), pages, paper: paperName }))}<br>
-${esc(t('Spine: {s} in ({smm} mm)', { s: fmt(spine), smm: mm(spine) }))}${spineText ? '' : ' · ' + esc(t('under 79 pages: no text on the spine'))}<br>
-<span style="color:#c0392b">${esc(t('Pink: bleed, cut off. Red line: trim.'))}</span> ${esc(t('Dashed: keep text inside.'))}<br>
-${esc(t('Use this page as a guide layer and hide it before you export your cover: one PDF, at least 300 DPI.'))}</div>`)}
-${spine > 0.3 ? box(spineX, bleed, spine, th, 'vert', esc(t('SPINE'))) : ''}
-</body></html>`;
-}
+function kdpCoverHtml(opts) { return PrintBook.kdpCoverHtml({ ...opts, t }); }
 
 // The window hands over the book's HTML with the inside margin left as a
 // mark (__NEO_GUTTER__), since it depends on the page count. The book is
@@ -2193,33 +2094,13 @@ ipcMain.on('more:state', (_e, on) => {
   moreState = on;
   try { buildMenu(); } catch (err) { logError('menu', err); }
 });
-// a template without the `more` items, and without the separators they leave
-// at an end or side by side
-function simpleTemplate(items, more) {
-  const kept = items.filter((it) => more || !it.more).map((it) => {
-    const { more: _, ...item } = it;
-    return Array.isArray(item.submenu) ? { ...item, submenu: simpleTemplate(item.submenu, more) } : item;
-  });
-  const shown = (it) => it.visible !== false;
-  return kept.filter((it, i) => {
-    if (it.type !== 'separator' || !shown(it)) return true;
-    const before = kept.slice(0, i).filter(shown).pop();
-    const after = kept.slice(i + 1).find(shown);
-    return !!before && !!after && before.type !== 'separator';
-  });
-}
+// a template without the `more` items, and the menus themselves: menu-template.js
+// (shared with NEO on the web)
+const { menuTemplate, simpleTemplate } = require('./menu-template.js');
 
 function buildMenu() {
   const isMac = process.platform === 'darwin';
   const isWin = process.platform === 'win32';
-  // macOS and Windows name faces that ship with the OS. Linux has none of
-  // them, so the menu names the faces bundled in fonts/ (see styles.css).
-  // The Windows list stays the one the renderer already understands.
-  const bodyFonts = isMac
-    ? ['Georgia', 'Palatino', 'Baskerville', 'Hoefler Text', 'Iowan Old Style', 'Jost', 'iA Writer Quattro']
-    : isWin
-      ? ['Georgia', 'Palatino', 'Baskerville', 'Cambria', 'Constantia', 'Jost', 'iA Writer Quattro']
-      : ['Gelasio', 'TeX Gyre Pagella', 'Libre Baskerville', 'Alegreya', 'Source Serif Pro', 'Jost', 'iA Writer Quattro'];
   // Keys the page answers itself, shown in the menu's shortcut column (a tab
   // in the label is no column on macOS: it printed as text, #372). Windows
   // and Linux leave an unregistered key to the page. macOS still makes it the
@@ -2238,395 +2119,26 @@ function buildMenu() {
       setImmediate(() => { try { buildMenu(); } catch (err) { logError('menu', err); } });
     }
   });
-  const template = [
-    // appMenu exists only on macOS — including it on Windows throws,
-    // which is exactly what kept NEO from ever opening a window there
-    ...(isMac ? [{
-      role: 'appMenu',
-      submenu: [
-        { role: 'about', label: t('About NEO') },
-        { type: 'separator' },
-        { role: 'services', label: t('Services') },
-        { type: 'separator' },
-        { role: 'hide', label: t('Hide NEO') },
-        { role: 'hideOthers', label: t('Hide Others') },
-        { role: 'unhide', label: t('Show All') },
-        { type: 'separator' },
-        { role: 'quit', label: t('Quit NEO') }
-      ]
-    }] : []),
-    {
-      label: t('File'),
-      submenu: [
-        {
-          label: t('Export'),
-          submenu: scriptState.on ? [
-            { label: 'PDF (.pdf)', click: () => sendToWindow({ type: 'export', format: 'pdf' }) },
-            { label: 'Fountain (.fountain)', click: () => sendToWindow({ type: 'export', format: 'fountain' }) },
-            { label: 'Final Draft (.fdx)', click: () => sendToWindow({ type: 'export', format: 'fdx' }) }
-          ] : [
-            { more: true, label: t('Plain Text (.txt)'), click: () => sendToWindow({ type: 'export', format: 'txt' }) },
-            { more: true, label: 'Markdown (.md)', click: () => sendToWindow({ type: 'export', format: 'md' }) },
-            { more: true, label: t('Web Page (.html)'), click: () => sendToWindow({ type: 'export', format: 'html' }) },
-            { label: 'PDF (.pdf)', click: () => sendToWindow({ type: 'export', format: 'pdf' }) },
-            { label: 'Word (.docx)', click: () => sendToWindow({ type: 'export', format: 'docx' }) },
-            { label: 'EPUB (.epub)', click: () => sendToWindow({ type: 'export', format: 'epub' }) },
-            { type: 'separator' },
-            { label: t('Paperback for KDP…'), click: () => sendToWindow({ type: 'export', format: 'paperback' }) },
-            { more: true, label: t('Manuscript Format…'), click: () => sendToWindow({ type: 'export', format: 'manuscript' }) },
-            { type: 'separator' },
-            {
-              more: true,
-              id: 'export-custom-chapter-titles',
-              label: t('Chapter Titles Only'),
-              type: 'checkbox',
-              checked: !!readJSON(LIBRARY_FILE, {}).exportCustomChapterTitles,
-              click: (item) => sendToWindow({ type: 'exportCustomChapterTitles', checked: item.checked })
-            }
-          ]
-        },
-        { type: 'separator' },
-        {
-          label: t('Email Draft to Myself'),
-          accelerator: 'CmdOrCtrl+E',
-          click: () => sendToWindow({ type: 'emailDraft' })
-        },
-        { label: t('Email Settings…'), click: () => sendToWindow({ type: 'emailSettings' }) },
-        { type: 'separator' },
-        // shown, not registered: the window answers ⌘S itself, so it works the
-        // same in Pocket with a keyboard and never fires twice
-        { label: t('Take Snapshot'), accelerator: 'CmdOrCtrl+S', registerAccelerator: false, click: () => sendToWindow({ type: 'snapshot' }) },
-        { type: 'separator' },
-        { more: true, label: t('Cover Art…'), click: () => sendToWindow({ type: 'coverArt' }) },
-        {
-          label: t('Goals…'),
-          accelerator: 'CmdOrCtrl+,',
-          click: () => sendToWindow({ type: 'stats' })
-        },
-        {
-          more: true,
-          label: t('New Books Open To'),
-          submenu: [
-            { label: t('Blank Page'), type: 'radio', checked: writingStyle !== 'plotter', click: () => sendToWindow({ type: 'writingStyle', value: 'pantser' }) },
-            { label: t('Outline First'), type: 'radio', checked: writingStyle === 'plotter', click: () => sendToWindow({ type: 'writingStyle', value: 'plotter' }) }
-          ]
-        },
-        { type: 'separator' },
-        {
-          label: t('Import Manuscripts…'),
-          accelerator: 'CmdOrCtrl+Shift+I',
-          click: () => sendToWindow({ type: 'import' })
-        },
-        {
-          more: true,
-          label: t('Import Chapters…'),
-          enabled: bookOpenState && !scriptState.on,
-          click: () => sendToWindow({ type: 'importChapters' })
-        },
-        { more: true, label: t('Reshelve a Book…'), click: () => sendToWindow({ type: 'reshelve' }) },
-        { label: t('Library Folder…'), click: () => { chooseLibraryFolder().catch((err) => logError('library folder', err)); } },
-        { type: 'separator' },
-        {
-          label: t('Show More Features'),
-          type: 'checkbox',
-          checked: moreState,
-          click: (item) => sendToWindow({ type: 'moreFeatures', checked: item.checked })
-        },
-        { type: 'separator' },
-        ...(isMac ? [{ role: 'close', label: t('Close Window') }] : [{ role: 'quit', label: t('Quit') }])
-      ]
+  const template = menuTemplate({
+    t, isMac, isWin, send: sendToWindow, pageKey,
+    st: {
+      script: scriptState, view: viewState, pages: pagesState, pageWidth: pageWidthState,
+      typewriter: typewriterState, nbspMarks: nbspMarksState, flush: flushState, poetry: poetryState,
+      vim: vimState, uiZoom: uiZoomState, uiLanguage, writingStyle, more: moreState,
+      bookOpen: bookOpenState, spellLanguage
     },
-    {
-      // macOS slips Writing Tools and AutoFill into this menu on its own;
-      // hideSystemEditItems() hides them again (see below)
-      label: t('Edit'),
-      submenu: [
-        // standard items carry their own labels, so they follow NEO's language
-        { role: 'undo', label: t('Undo') }, { role: 'redo', label: t('Redo') },
-        { type: 'separator' },
-        { role: 'cut', label: t('Cut') }, { role: 'copy', label: t('Copy') }, { role: 'paste', label: t('Paste') },
-        { role: 'pasteAndMatchStyle', label: t('Paste and Match Style') }, { role: 'selectAll', label: t('Select All') },
-        { type: 'separator' },
-        {
-          label: isMac ? t('Find & Replace') : t('Find & Replace').replace(/&/g, '&&'),
-          accelerator: 'CmdOrCtrl+F',
-          click: () => sendToWindow({ type: 'find' })
-        },
-        {
-          label: t('Spellcheck Pass'),
-          accelerator: 'CmdOrCtrl+;',
-          // shown, not registered: the window answers the ; character itself
-          // (isSpellcheckShortcut). Windows matches an accelerator by key
-          // position, so on some layouts this one and ⌘/ landed on the same
-          // key and one press did both (#282).
-          registerAccelerator: false,
-          click: () => sendToWindow({ type: 'spellcheck' })
-        },
-        {
-          more: true,
-          label: t('Spellcheck Language'),
-          submenu: Object.entries(SPELL_LANGUAGES).map(([code, lang]) => ({
-            label: lang.label,
-            type: 'radio',
-            checked: spellLanguage === code,
-            click: () => sendToWindow({ type: 'spellLanguage', value: code })
-          }))
-        }
-      ]
-    },
-    {
-      label: t('Format'),
-      submenu: [
-        {
-          visible: !scriptState.on, // a script is set in Courier Prime
-          label: t('Body Font'),
-          submenu: [
-            // A font the writer picked from their own computer is not in the list, and a radio
-            // group with nothing checked shows the first built-in as chosen. Show the font in use
-            // (#295).
-            ...(viewState.bodyFont && !bodyFonts.includes(viewState.bodyFont)
-              ? [{
-                  label: viewState.bodyFont,
-                  type: 'radio',
-                  checked: true,
-                  click: () => sendToWindow({ type: 'bodyFont', value: viewState.bodyFont })
-                }]
-              : []),
-            ...bodyFonts.map((f) => ({
-              label: f,
-              type: 'radio',
-              checked: viewState.bodyFont === f,
-              click: () => sendToWindow({ type: 'bodyFont', value: f })
-            })),
-            { type: 'separator' },
-            { more: true, label: t('Other Font…'), click: () => sendToWindow({ type: 'bodyFontPick' }) }
-          ]
-        },
-        {
-          visible: !scriptState.on,
-          label: t('Drop Cap Style'),
-          submenu: [
-            { label: t('Literary'), type: 'radio', checked: viewState.dropCap === 'literary', click: () => sendToWindow({ type: 'dropCap', value: 'literary' }) },
-            { label: t('Fantasy'), type: 'radio', checked: viewState.dropCap === 'fantasy', click: () => sendToWindow({ type: 'dropCap', value: 'fantasy' }) },
-            { label: t('Sci-Fi'), type: 'radio', checked: viewState.dropCap === 'scifi', click: () => sendToWindow({ type: 'dropCap', value: 'scifi' }) },
-            { type: 'separator' },
-            { label: t('Off'), type: 'radio', checked: viewState.dropCap === 'none', click: () => sendToWindow({ type: 'dropCap', value: 'none' }) }
-          ]
-        },
-        {
-          more: true,
-          visible: !scriptState.on, // a script's elements are placed where they print
-          label: t('Align Paragraph'),
-          submenu: [
-            { label: t('Left'), accelerator: 'CmdOrCtrl+Shift+L', type: 'radio', checked: viewState.align === 'left', click: () => sendToWindow({ type: 'align', value: 'left' }) },
-            { label: t('Center'), accelerator: 'CmdOrCtrl+Shift+C', type: 'radio', checked: viewState.align === 'center', click: () => sendToWindow({ type: 'align', value: 'center' }) },
-            { label: t('Right'), accelerator: 'CmdOrCtrl+Shift+R', type: 'radio', checked: viewState.align === 'right', click: () => sendToWindow({ type: 'align', value: 'right' }) },
-            { label: t('Justify'), accelerator: 'CmdOrCtrl+Shift+J', type: 'radio', checked: viewState.align === 'justify', click: () => sendToWindow({ type: 'align', value: 'justify' }) }
-          ]
-        },
-        { type: 'separator' },
-        { label: t('Larger Text'), accelerator: 'CmdOrCtrl-Plus', click: () => sendToWindow({ type: 'fontSize', value: 1 }) },
-        { label: t('Smaller Text'), accelerator: 'CmdOrCtrl-Minus', click: () => sendToWindow({ type: 'fontSize', value: -1 }) },
-        { label: t('Reset Text Size'), accelerator: 'CmdOrCtrl+0', click: () => sendToWindow({ type: 'fontSize', value: 0 }) },
-        { type: 'separator', visible: !scriptState.on },
-        {
-          more: true,
-          visible: !scriptState.on, // a script has its own pages
-          label: t('Show Pages'),
-          type: 'checkbox',
-          checked: pagesState.paged,
-          click: () => sendToWindow({ type: 'pagedView' })
-        },
-        {
-          more: true,
-          visible: !scriptState.on,
-          label: t('Two Pages Side by Side'),
-          type: 'checkbox',
-          checked: pagesState.twoUp,
-          enabled: pagesState.paged, // greyed out until the pages are shown
-          click: () => sendToWindow({ type: 'twoPageView' })
-        },
-        {
-          more: true,
-          visible: !scriptState.on, // a script is set to its own page
-          label: t('Page Width'),
-          submenu: [['regular', t('Regular')], ['wide', t('Wide')], ['wider', t('Wider')]].map(([value, label]) => ({
-            label,
-            type: 'radio',
-            checked: pageWidthState === value,
-            click: () => sendToWindow({ type: 'pageWidth', value })
-          }))
-        },
-        { type: 'separator' },
-        {
-          label: t('Typewriter Scrolling'),
-          accelerator: 'CmdOrCtrl+Shift+T',
-          type: 'checkbox',
-          checked: typewriterState,
-          click: () => sendToWindow({ type: 'typewriter' })
-        },
-        {
-          more: true,
-          label: t('Non-Breaking Marks'),
-          type: 'checkbox',
-          checked: nbspMarksState,
-          click: () => sendToWindow({ type: 'nbspMarks' })
-        },
-        { type: 'separator' },
-        // tick when the caret sits in one; the keys are the editor's own
-        // (they split or continue a paragraph, which a menu item can't), so
-        // they're shown, not registered (pageKey)
-        // a script's elements stand where a book's paragraph kinds do
-        ...(scriptState.on ? [
-          [t('Scene Heading'), 'heading'], [t('Action'), 'action'], [t('Character'), 'character'], [t('Parenthetical'), 'paren'],
-          [t('Dialogue'), 'dialogue'], [t('Transition'), 'transition'], [t('Shot'), 'shot']
-        ].map(([label, value], i) => ({
-          label,
-          ...pageKey('CmdOrCtrl+' + (i + 1), () => sendToWindow({ type: 'scriptElement', value })),
-          type: 'radio',
-          checked: scriptState.element === value
-        })) : []),
-        // the script's own style, kept with that script
-        ...(scriptState.on ? [
-          { type: 'separator' },
-          { label: t('Underline Scene Headings'), type: 'checkbox', checked: scriptState.underline, click: () => sendToWindow({ type: 'scriptStyle', value: 'underline' }) },
-          { label: t('(CONT\'D) for a Returning Speaker'), type: 'checkbox', checked: scriptState.contd, click: () => sendToWindow({ type: 'scriptStyle', value: 'contd' }) }
-        ] : []),
-        {
-          visible: !scriptState.on,
-          label: t('Flush Paragraph'),
-          ...pageKey('Shift+Enter', () => sendToWindow({ type: 'flush' })),
-          type: 'checkbox',
-          checked: flushState
-        },
-        {
-          more: true,
-          visible: !scriptState.on,
-          label: t('Poetry Paragraph'),
-          ...pageKey('CmdOrCtrl+Shift+Enter', () => sendToWindow({ type: 'poetry' })),
-          type: 'checkbox',
-          checked: poetryState
-        },
-        { type: 'separator' },
-        // *italic* and **bold** as you type or paste; off for writers who
-        // keep literal asterisks
-        {
-          more: true,
-          label: t('Markdown Emphasis'),
-          type: 'checkbox',
-          checked: !readJSON(LIBRARY_FILE, {}).markdownOff,
-          click: (item) => sendToWindow({ type: 'markdownEmphasis', checked: item.checked })
-        }
-      ]
-    },
-    {
-      label: t('View'),
-      submenu: [
-        {
-          label: t('Keyboard Shortcuts…'),
-          accelerator: 'CmdOrCtrl+/',
-          registerAccelerator: false, // the window answers / and ? itself (isHelpShortcut)
-          click: () => sendToWindow({ type: 'help' })
-        },
-        { type: 'separator' },
-        {
-          label: t('Full Screen'),
-          accelerator: 'CmdOrCtrl+Shift+F',
-          click: () => {
-            const w = BrowserWindow.getFocusedWindow();
-            if (w) w.setFullScreen(!w.isFullScreen());
-          }
-        },
-        {
-          more: true,
-          label: t('Focus Mode'),
-          submenu: [
-            { label: t('Cycle'), accelerator: 'CmdOrCtrl+Shift+O', click: () => sendToWindow({ type: 'focusCycle' }) },
-            { type: 'separator' },
-            { label: t('Sentence'), type: 'radio', checked: viewState.focus === 'sentence', click: () => sendToWindow({ type: 'focus', value: 'sentence' }) },
-            { label: t('Paragraph'), type: 'radio', checked: viewState.focus === 'paragraph', click: () => sendToWindow({ type: 'focus', value: 'paragraph' }) },
-            { label: t('Off'), type: 'radio', checked: viewState.focus === 'off', click: () => sendToWindow({ type: 'focus', value: 'off' }) }
-          ]
-        },
-        {
-          more: true,
-          label: t('Vim Keys'),
-          type: 'checkbox',
-          checked: vimState,
-          click: () => sendToWindow({ type: 'vim' })
-        },
-        { type: 'separator' },
-        {
-          label: t('Page'),
-          submenu: [
-            { label: t('Night'), type: 'radio', checked: viewState.pageTheme !== 'paper' && viewState.pageTheme !== 'light', click: () => sendToWindow({ type: 'pageTheme', value: 'night' }) },
-            { label: t('Paper'), type: 'radio', checked: viewState.pageTheme === 'paper', click: () => sendToWindow({ type: 'pageTheme', value: 'paper' }) },
-            // white paper in a light room: the whole app, shelf included
-            { label: t('Light'), type: 'radio', checked: viewState.pageTheme === 'light', click: () => sendToWindow({ type: 'pageTheme', value: 'light' }) }
-          ]
-        },
-        {
-          more: true,
-          label: t('Brighter Interface'),
-          type: 'checkbox',
-          checked: viewState.uiBright,
-          click: () => sendToWindow({ type: 'uiBright' })
-        },
-        {
-          more: true,
-          // the size in use rides on the label; the steps are a tenth (#364),
-          // from 90% up to the page zoom's own 300%
-          label: t('Interface Size') + (uiZoomState === 1 ? '' : ' — ' + new Intl.NumberFormat(uiLanguage || 'en', { style: 'percent' }).format(uiZoomState)),
-          submenu: [
-            { label: t('Larger'), click: () => sendToWindow({ type: 'uiZoomStep', value: 1 }) },
-            { label: t('Smaller'), click: () => sendToWindow({ type: 'uiZoomStep', value: -1 }) },
-            { type: 'separator' },
-            { label: t('Reset'), click: () => sendToWindow({ type: 'uiZoomStep', value: 0 }) }
-          ]
-        },
-        { type: 'separator' },
-        {
-          more: true,
-          label: t('Language'),
-          submenu: listLanguages().map((lang) => ({
-            label: lang.name,
-            type: 'radio',
-            checked: uiLanguage === lang.code,
-            click: () => setUiLanguage(lang.code)
-          }))
-        }
-      ]
-    },
-    {
-      role: 'windowMenu',
-      label: t('Window'),
-      submenu: [
-        { role: 'minimize', label: t('Minimize') },
-        { role: 'zoom', label: t('Zoom') },
-        ...(isMac
-          ? [{ type: 'separator' }, { role: 'front', label: t('Bring All to Front') }]
-          : [{ role: 'close', label: t('Close') }])
-      ]
-    },
-    {
-      label: t('Help'),
-      submenu: [
-        {
-          label: t('NEO Shortcuts'),
-          click: () => sendToWindow({ type: 'help' })
-        },
-        { type: 'separator' },
-        {
-          label: t('About NEO'),
-          click: () => sendToWindow({ type: 'about' })
-        },
-        {
-          label: t('Check for Update…'),
-          click: () => sendToWindow({ type: 'checkUpdate' })
-        }
-      ]
+    spellLanguages: SPELL_LANGUAGES,
+    languages: listLanguages(),
+    library: () => readJSON(LIBRARY_FILE, {}),
+    actions: {
+      libraryFolder: () => { chooseLibraryFolder().catch((err) => logError('library folder', err)); },
+      fullScreen: () => {
+        const w = BrowserWindow.getFocusedWindow();
+        if (w) w.setFullScreen(!w.isFullScreen());
+      },
+      setLanguage: (code) => setUiLanguage(code)
     }
-  ];
+  });
   const menu = Menu.buildFromTemplate(simpleTemplate(template, moreState));
   editMenuState.edit = null; // the old menu bar is going: forget its Edit menu first
   Menu.setApplicationMenu(menu);

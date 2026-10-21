@@ -17,7 +17,7 @@ const fs = require('fs');
 const path = require('path');
 
 const ROOT = path.join(__dirname, '..');
-const JS_FILES = ['app.js', 'main.js', 'covers.js', 'pocket/www/pocket-bridge.js', 'pocket/www/index.html', 'web/web-bridge.js', 'web/sync.js', 'web/library-zip.js'];
+const JS_FILES = ['app.js', 'main.js', 'covers.js', 'pocket/www/pocket-bridge.js', 'pocket/www/index.html', 'web/web-bridge.js', 'web/sync.js', 'web/library-zip.js', 'web/web-menu.js', 'web/web-powers.js', 'menu-template.js', 'print-book.js'];
 const HTML_FILES = ['index.html', 'pocket/www/index.html'];
 const LOCALES = path.join(ROOT, 'locales');
 

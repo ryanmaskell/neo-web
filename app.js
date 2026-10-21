@@ -275,6 +275,10 @@ const IS_LINUX = !IS_MAC && /linux/i.test(navigator.platform) && !window.Capacit
 const NO_HOVER = !!(window.matchMedia && window.matchMedia('(hover: none)').matches) || !!window.Capacitor;
 // NEO Pocket (the Android and iOS shell)
 const IS_POCKET = !!window.Capacitor;
+// NEO on the web (web/): Pocket's touch page with every desktop feature, its
+// menus behind ⋯. Only Pocket's own apps are always simple
+const IS_WEB = !!window.NEO_WEB;
+const POCKET_APP = IS_POCKET && !IS_WEB;
 
 // Simple NEO, and File → Show More Features (library.moreFeatures). Simple is
 // the default: the features behind the switch keep their menu items, keys
@@ -284,7 +288,7 @@ const IS_POCKET = !!window.Capacitor;
 // a bound shelf, a painted cover open and export as before. Pocket (Android
 // and iOS) is always simple and has no switch. SIMPLE NEO near the end of
 // this file decides the switch for a library that predates it.
-const moreOn = () => !IS_POCKET && !!(library && library.moreFeatures);
+const moreOn = () => !POCKET_APP && !!(library && library.moreFeatures);
 // *italic* and **bold** typed as Markdown are behind the switch too
 const markdownOff = () => !!library && (!moreOn() || !!library.markdownOff);
 
@@ -1964,7 +1968,7 @@ function bookTile(meta, opts = {}) {
     const coverItems = script ? [] : [
       ...(NO_HOVER ? [] : [{ label: meta.coverImage ? t('Replace cover art…') : t('Set cover art…'), value: 'cover' }]),
       { label: t('New cover'), value: 'refresh' },
-      ...(!window.Capacitor ? [{ label: t('Save cover as image…'), value: 'saveCover' }] : []),
+      ...(!POCKET_APP ? [{ label: t('Save cover as image…'), value: 'saveCover' }] : []),
       ...(meta.coverImage ? ['-', { label: t('Remove cover art'), value: 'uncover', danger: true }] : [])
     ];
     let choice;
@@ -2022,7 +2026,7 @@ function bookTile(meta, opts = {}) {
         ...(moreOn() ? [{ label: t('Text (.txt)'), value: 'txt' }, { label: t('Markdown (.md)'), value: 'md' }, { label: t('HTML (.html)'), value: 'html' }] : []),
         { label: 'PDF (.pdf)', value: 'pdf' },
         { label: t('Word (.docx)'), value: 'docx' }, { label: t('EPUB (.epub)'), value: 'epub' },
-        ...(window.Capacitor || isPageMeta(meta) ? [] : [{ label: t('Paperback for KDP…'), value: 'paperback' }])
+        ...(POCKET_APP || isPageMeta(meta) ? [] : [{ label: t('Paperback for KDP…'), value: 'paperback' }])
       ]);
       if (!fmt) return;
       if (window.Capacitor || fmt === 'paperback') {
@@ -11466,7 +11470,7 @@ function sidePaneForTab(name) {
   if (outline) renderLooseCards();
   // on Darlings the pane holds the book's snapshots, and stays open
   const was = $('#editor-view').classList.contains('darlings-tab');
-  const dar = name === 'darlings' && !!book && snapsCan() && !IS_POCKET; // (Pocket's own list: later)
+  const dar = name === 'darlings' && !!book && snapsCan() && !POCKET_APP; // (Pocket's own list: later)
   $('#editor-view').classList.toggle('darlings-tab', dar);
   if (dar) { snapList(); $('#side-pane').classList.add('open'); }
   else if (was && $('#side-pane').dataset.pinned !== '1') $('#side-pane').classList.remove('open');
@@ -18082,7 +18086,9 @@ function usesMoreFeatures(lib) {
 }
 
 async function decideMoreFeatures() {
-  if (IS_POCKET || typeof library.moreFeatures === 'boolean') { reportMore(); return; }
+  if (POCKET_APP || typeof library.moreFeatures === 'boolean') { reportMore(); return; }
+  // the web opens with everything showing; File → Show More Features turns it off
+  if (IS_WEB) { library.moreFeatures = true; await writeLibrary(library); reportMore(); return; }
   let more = false;
   if (library.firstRunDone) {
     more = usesMoreFeatures(library);
@@ -18106,7 +18112,7 @@ function reportMore() {
 }
 
 async function setMoreFeatures(on) {
-  if (IS_POCKET || on === moreOn()) return; // (Pocket is always simple)
+  if (POCKET_APP || on === moreOn()) return; // (Pocket is always simple)
   library.moreFeatures = on;
   await writeLibrary(library);
   reportMore();

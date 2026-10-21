@@ -12,9 +12,16 @@ library kept in the browser, with two free ways to carry books in and out:
   whole library as one `.zip`; Open library from Files reads it back on
   another device. A desktop NEO backup (`Backups/neo-backup-….zip`) opens too.
 
-Manuscripts come in with Import on the shelf (`.docx`, `.txt`, `.md`), the
-same reader desktop NEO uses (`import-parse.js`). Exports go out through the
-share sheet or a download; a PDF through the browser's Print → Save as PDF.
+It has every desktop feature. The desktop's menu bar is behind **⋯** (in
+the editor's bar and on the shelf), with the same items, ticks and keys
+(File → Show More Features turns the extra ones off). Manuscripts come in
+with Import (`.docx`, `.txt`, `.md`, `.fountain`, `.fdx`), the same reader
+desktop NEO uses (`import-parse.js`). Exports go out through the share sheet
+or a download. PDFs (the book, Paperback for KDP and its cover template,
+Manuscript Format) are laid out as on the desktop and saved through the
+browser's Print → Save as PDF, one tap per file; on an iPad, the share
+button at the top of the print screen saves it. Painted covers use your own
+OpenAI key (File → Cover Art…), kept in this browser only.
 
 It works offline once opened. On an iPad, **Share → Add to Home Screen**: it
 then opens like an app, and Safari doesn't clear its storage after a week
@@ -60,6 +67,8 @@ try OneDrive locally.
 |---|---|
 | `web/capacitor-shim.js` | `window.Capacitor` over IndexedDB, so `pocket/www/pocket-bridge.js` runs unchanged. `NeoStore` is the library itself |
 | `web/web-bridge.js` | What a browser does differently: import, export, PDF, covers, the shelf's Sync & Files sheet |
+| `web/web-menu.js` | The desktop's menus (`menu-template.js`) behind ⋯, and their keys |
+| `web/web-powers.js` | Paperback, Manuscript Format, painted covers, email, full screen, updates |
 | `web/onedrive.js` | Microsoft sign-in (OAuth with PKCE, no library, no server) and the Graph calls |
 | `web/sync.js` | The library ↔ OneDrive, whole files, eTags so nothing is written over unseen |
 | `web/library-zip.js` | The library as a `.zip`, saved and opened |
