@@ -2948,7 +2948,20 @@ function wireChapterBody(body, chId) {
   // and no key, so the rules for quotes, dashes and capitals never saw them
   // (#368). Here the same rules run on the character as it arrives. A real
   // key, which they already had, is left alone.
+  // The same for a new paragraph: an on-screen keyboard's Return (the
+  // iPad's, finishing a word it was suggesting) can arrive as input with
+  // no Enter the page could act on, and then the second and third Enters
+  // never made a section break or a chapter. That Enter goes through the
+  // page's own rules here, as if it were the key.
+  let enterKeyAt = 0;
   if (IS_POCKET) {
+    body.addEventListener('beforeinput', (e) => {
+      if (e.inputType !== 'insertParagraph' || !e.cancelable || Date.now() - enterKeyAt < 300) return;
+      composing = false; // a paragraph only comes once the word is done
+      const key = new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', bubbles: true, cancelable: true });
+      body.dispatchEvent(key);
+      if (key.defaultPrevented) e.preventDefault();
+    });
     body.addEventListener('beforeinput', (e) => {
       if (e.inputType !== 'insertText' || !e.cancelable || composing || !e.data || [...e.data].length !== 1) return;
       if (Date.now() - lastRealKeyAt < 150) return;
@@ -2966,6 +2979,7 @@ function wireChapterBody(body, chId) {
     // rides on Enter with nothing being composed, as on GNOME (Wayland, IBus),
     // where it kept ⇧Enter and ⌘⇧Enter from ever reaching NEO.
     if (composing || e.isComposing || (e.keyCode === 229 && e.key !== 'Enter')) return;
+    if (e.key === 'Enter' && e.isTrusted) enterKeyAt = Date.now();
     // count consecutive Enters — the double/triple rhythm works mid-sentence
     if (e.key === 'Enter' && !e.shiftKey) enterRun++;
     else enterRun = 0;
