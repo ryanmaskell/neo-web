@@ -54,7 +54,8 @@
   });
 
   const send = (msg) => { if (root.pocketMenu) root.pocketMenu(msg); };
-  const lib = () => (typeof root.library !== 'undefined' && root.library) || {};
+  // app.js's library.json (a let in app.js: no property of window)
+  const lib = () => (typeof library !== 'undefined' && library) || {};
 
   function languages() {
     return (root.NEO_LANGUAGES || [{ code: 'en', name: 'English' }]);

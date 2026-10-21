@@ -71,3 +71,22 @@ body.light #web-menu .wm-sheet { background: #f7f4ee; color: #2a2722; border-col
 body.light #web-menu .wm-item:hover, body.light #web-menu .wm-item:focus-visible { background: #ece6da; }
 body.light #web-menu .wm-head, body.light #web-menu .wm-sep { border-color: #e3ddd1; background-color: transparent; }
 body.light #web-menu .wm-sep { background: #e3ddd1; }
+
+/* the bar under selected words, on a touch screen (web-format.js) */
+#web-format {
+  position: fixed; left: 0; top: 0; z-index: 940; display: flex; gap: 2px; padding: 4px;
+  background: #2a2a2a; border: 1px solid #3a3a3a; border-radius: 10px;
+  box-shadow: 0 6px 22px rgba(0, 0, 0, 0.45); will-change: transform;
+}
+#web-format[hidden] { display: none; }
+#web-format button {
+  min-width: 44px; height: 40px; padding: 0 10px; border: none; border-radius: 7px;
+  background: none; color: #d6d2c6; font: 18px/1 Georgia, "Times New Roman", serif; cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+#web-format button[hidden] { display: none; }
+#web-format button.on { background: #3a3427; color: #e9d9a8; }
+#web-format .wf-fn { font-size: 15px; font-family: -apple-system, BlinkMacSystemFont, sans-serif; }
+body.light #web-format { background: #f7f4ee; border-color: #d8d2c6; box-shadow: 0 6px 22px rgba(0, 0, 0, 0.15); }
+body.light #web-format button { color: #2a2722; }
+body.light #web-format button.on { background: #ece2c8; color: #5a4a1e; }

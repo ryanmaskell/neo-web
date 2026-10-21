@@ -69,7 +69,7 @@
     return out;
   };
   neo.importPick = async (opts) => {
-    const scripts = !(opts && opts.chapters) && typeof root.moreOn === 'function' && root.moreOn();
+    const scripts = !(opts && opts.chapters) && typeof moreOn === 'function' && moreOn();
     const files = await pickFiles(scripts ? '.docx,.txt,.md,.fountain,.fdx' : '.docx,.txt,.md', true);
     const out = [];
     for (const f of files) out.push(await importOne(f));

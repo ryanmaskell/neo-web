@@ -24,7 +24,7 @@ execFileSync(process.execPath, [path.join(__dirname, 'pocket-www.js')], { stdio:
 fs.rmSync(dist, { recursive: true, force: true });
 fs.cpSync(www, dist, { recursive: true });
 const copy = (from, to) => fs.cpSync(from, path.join(dist, to || path.basename(from)), { recursive: true });
-for (const f of ['capacitor-shim.js', 'onedrive.js', 'sync.js', 'library-zip.js', 'web-bridge.js', 'web-menu.js', 'web-powers.js', 'paged-run.js', 'web.css', 'manifest.webmanifest', 'icons']) copy(path.join(web, f));
+for (const f of ['capacitor-shim.js', 'onedrive.js', 'sync.js', 'library-zip.js', 'web-bridge.js', 'web-menu.js', 'web-format.js', 'web-powers.js', 'paged-run.js', 'web.css', 'manifest.webmanifest', 'icons']) copy(path.join(web, f));
 // the desktop's own pieces the web runs too: the import reader, the menus,
 // the paperback's rules, the manuscript's pages and Paged.js
 for (const f of ['import-parse.js', 'menu-template.js', 'print-book.js', 'manuscript.js']) copy(path.join(root, f));
@@ -70,7 +70,8 @@ swap('<script src="pocket-bridge.js"></script>', [
   '  <script src="menu-template.js"></script>',
   '  <script src="print-book.js"></script>',
   '  <script src="web-powers.js"></script>',
-  '  <script src="web-menu.js"></script>'
+  '  <script src="web-menu.js"></script>',
+  '  <script src="web-format.js"></script>'
 ].join('\n'));
 swap('<script src="app.js"></script>', '<script src="manuscript.js"></script>\n  <script src="app.js"></script>');
 fs.writeFileSync(path.join(dist, 'index.html'), html);

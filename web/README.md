@@ -14,7 +14,7 @@ library kept in the browser, with two free ways to carry books in and out:
 
 It has every desktop feature. The desktop's menu bar is behind **⋯** (in
 the editor's bar and on the shelf), with the same items, ticks and keys
-(File → Show More Features turns the extra ones off). Manuscripts come in
+(File → Show More Features turns the extra ones off). On a touch screen, select words and Bold, Italic, Underline and Footnote come up under them. Manuscripts come in
 with Import (`.docx`, `.txt`, `.md`, `.fountain`, `.fdx`), the same reader
 desktop NEO uses (`import-parse.js`). Exports go out through the share sheet
 or a download. PDFs (the book, Paperback for KDP and its cover template,
@@ -67,6 +67,7 @@ try OneDrive locally.
 |---|---|
 | `web/capacitor-shim.js` | `window.Capacitor` over IndexedDB, so `pocket/www/pocket-bridge.js` runs unchanged. `NeoStore` is the library itself |
 | `web/web-bridge.js` | What a browser does differently: import, export, PDF, covers, the shelf's Sync & Files sheet |
+| `web/web-format.js` | Bold, Italic, Underline and Footnote under selected words, on a touch screen |
 | `web/web-menu.js` | The desktop's menus (`menu-template.js`) behind ⋯, and their keys |
 | `web/web-powers.js` | Paperback, Manuscript Format, painted covers, email, full screen, updates |
 | `web/onedrive.js` | Microsoft sign-in (OAuth with PKCE, no library, no server) and the Graph calls |
