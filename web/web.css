@@ -71,3 +71,7 @@ body.light #web-menu .wm-sheet { background: #f7f4ee; color: #2a2722; border-col
 body.light #web-menu .wm-item:hover, body.light #web-menu .wm-item:focus-visible { background: #ece6da; }
 body.light #web-menu .wm-head, body.light #web-menu .wm-sep { border-color: #e3ddd1; background-color: transparent; }
 body.light #web-menu .wm-sep { background: #e3ddd1; }
+
+/* a lone chapter shows its heading from the start, as the writer's desktop
+   NEO does (styles.css waits for chapter two) */
+.chapter.solo .chapter-head { display: block; }
